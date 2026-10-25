@@ -1,46 +1,36 @@
-'use strict';
-/* PWA 离线缓存(仅 HTTPS/localhost 下生效,iOS 主屏 App 需发布到静态托管后才有离线能力)
-   策略:页面导航与 data.js 网络优先(题库更新即时可见,断网回落缓存);
-   其余静态资源缓存优先。build_site.py 每次构建会更新 ?v= 版本号,天然击穿缓存。 */
-const CACHE = 'gzbuild-quiz-v1';
+/* Service Worker:App Shell 缓存,首开后秒开/离线可用;?v= 变化自动拉新 */
+const CACHE = 'gzm-v1';
+const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'manifest.webmanifest',
+               'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'];
 
-self.addEventListener('install', () => self.skipWaiting());
-
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener('install', function (e) {
+  self.skipWaiting();
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }));
 });
-
-self.addEventListener('fetch', e => {
+self.addEventListener('activate', function (e) {
+  e.waitUntil(caches.keys().then(function (ks) {
+    return Promise.all(ks.filter(function (k) { return k !== CACHE; })
+      .map(function (k) { return caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
+});
+self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  // 导航请求与 data.js:网络优先,离线时回落缓存
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('/data.js')) {
-    e.respondWith(
-      fetch(e.request)
-        .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
-    return;
-  }
-
-  // 其余资源:缓存优先
+  if (url.origin !== location.origin) return;
+  if (url.pathname.endsWith('wrongbook-pdf')) return;   // 导出走网络
+  // 缓存优先,后台不更新(?v= 变了就是新 URL,自然拉新;旧缓存由 activate 清)
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      if (res.ok) {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-      }
-      return res;
-    }))
+    caches.match(e.request).then(function (hit) {
+      if (hit) return hit;
+      return fetch(e.request).then(function (res) {
+        if (res.ok && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') ||
+                       url.pathname.endsWith('.png') || url.pathname.endsWith('.html') ||
+                       url.pathname === location.pathname)) {
+          const clone = res.clone();
+          caches.open(CACHE).then(function (c) { c.put(e.request, clone); });
+        }
+        return res;
+      });
+    }).catch(function () { return caches.match('./'); })
   );
 });

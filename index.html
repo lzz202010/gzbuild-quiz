@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>管综冲刺刷题 · 2027 新编预测卷</title>
-<link rel="stylesheet" href="style.css?v=2610252229">
+<link rel="stylesheet" href="style.css?v=2610252242">
 </head>
 <body>
 <div class="shell">
@@ -18,7 +18,12 @@
   <main id="app"></main>
 </div>
 <noscript>本网站需要启用 JavaScript。</noscript>
-<script src="data.js?v=2610252229"></script>
-<script src="app.js?v=2610252229"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+</script>
+<script src="data.js?v=2610252242"></script>
+<script src="app.js?v=2610252242"></script>
 </body>
 </html>

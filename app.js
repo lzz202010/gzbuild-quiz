@@ -86,9 +86,12 @@ function stopQTimer() {
 
 function tickQTimer() {
   const t = document.getElementById('qtimer');
-  if (!t) { stopQTimer(); return; }
+  if (!t) {                                  // 元素暂时不在(重渲染间隙)→ 不停表,下轮再试
+    if (quiz && !quiz.done) return;
+    stopQTimer(); return;
+  }
   const sec = Math.floor((Date.now() - qTimerStart) / 1000);
-  t.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  t.textContent = '⏱ ' + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
   t.classList.toggle('warn', sec >= 180 && sec < 240);   // 3 分钟起闪烁
   t.classList.toggle('off', sec >= 240);                  // 4 分钟消失
 }
@@ -673,7 +676,7 @@ function renderQuiz() {
   bar.append(el('div', 'topbar-title', quiz.title));
   const right = el('div', 'topbar-right');
   if (!quiz.done) {
-    const qt = el('span', 'qtimer', '0:00');
+    const qt = el('span', 'qtimer', '⏱ 0:00');
     qt.id = 'qtimer';
     qt.title = '本题用时(3 分钟后闪烁提醒,4 分钟隐去)';
     right.append(qt);
