@@ -5,6 +5,13 @@
 const BANK = window.BANK;
 const LETTERS = 'ABCDE';
 const CIRC = '①②③④⑤⑥⑦⑧⑨⑩';
+const COND_OPTS = [
+  '条件(1)充分,但条件(2)不充分',
+  '条件(2)充分,但条件(1)不充分',
+  '条件(1)和(2)单独都不充分,但条件(1)和(2)联合起来充分',
+  '条件(1)充分,条件(2)也充分',
+  '条件(1)和(2)单独都不充分,条件(1)和(2)联合起来也不充分',
+];
 const COND_RUBRIC = '条件充分性判断选项含义:A. 条件(1)充分,但条件(2)不充分　B. 条件(2)充分,但条件(1)不充分　C. 条件(1)(2)单独都不充分,但联合起来充分　D. 条件(1)充分,条件(2)也充分　E. 条件(1)(2)单独和联合起来都不充分';
 
 const $app = document.getElementById('app');
@@ -14,7 +21,7 @@ function load(k, d) {
   try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; }
   catch (e) { return d; }
 }
-let wrongBook = load(KEY_WRONG, {});   // id -> {t:错误次数, s:连对次数, last:时间戳, pick, star}
+let wrongBook = load(KEY_WRONG, {});   // 收录本:id -> {t:重做错次数, last:收录时间, pick:错选, star:手动收录}
 if (load('gzm.ver', 1) < 2 && window.BANK && BANK.legacy) {
   wrongBook = Object.fromEntries(Object.entries(wrongBook).map(function (e) {
     return [BANK.legacy[e[0]] || e[0], e[1]];
@@ -27,6 +34,37 @@ const saveWrong = () => localStorage.setItem(KEY_WRONG, JSON.stringify(wrongBook
 const saveHist = () => localStorage.setItem(KEY_HIST, JSON.stringify(hist));
 
 let quiz = null;            // 当前做题会话
+const KEY_SESSION = 'gzm.session.v1';
+
+function saveSession() {
+  if (!quiz) return;
+  if (quiz.done) { localStorage.removeItem(KEY_SESSION); return; }
+  try {
+    localStorage.setItem(KEY_SESSION, JSON.stringify({
+      title: quiz.title, kind: quiz.kind, mode: quiz.mode, subj: quiz.subj,
+      full: quiz.full, setNo: quiz.setNo, setName: quiz.setName, origin: quiz.origin || '#/',
+      ids: quiz.list.map(q => q.id), idx: quiz.idx, ans: quiz.ans, locked: quiz.locked
+    }));
+  } catch (e) {}
+}
+
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem(KEY_SESSION)); } catch (e) { return null; }
+}
+
+function restoreSession() {
+  const s = loadSession();
+  if (!s || !s.ids || !s.ids.length) return null;
+  const list = s.ids.map(id => BANK.qmap[id]).filter(Boolean);
+  if (!list.length) { localStorage.removeItem(KEY_SESSION); return null; }
+  quiz = { title: s.title, kind: s.kind, mode: s.mode, subj: s.subj,
+           full: !!s.full, setNo: s.setNo, setName: s.setName,
+           origin: s.origin || '#/', list: list,
+           idx: Math.min(s.idx || 0, list.length - 1),
+           ans: s.ans || {}, locked: s.locked || {},
+           done: false, showResult: false };
+  return quiz;
+}
 let drillSubj = 'math';
 let ansSubj = 'math';
 let ansSetFilter = '';
@@ -38,6 +76,32 @@ function plainText(html) {
 }
 let wrongFilter = 'all';    // 错题本过滤:all / due / star
 
+/* ───────────── 单题正计时(督促) ───────────── */
+let qTimerId = null, qTimerStart = 0, qTimerIdx = -1;
+
+function stopQTimer() {
+  if (qTimerId) { clearInterval(qTimerId); qTimerId = null; }
+  qTimerIdx = -1;
+}
+
+function tickQTimer() {
+  const t = document.getElementById('qtimer');
+  if (!t) { stopQTimer(); return; }
+  const sec = Math.floor((Date.now() - qTimerStart) / 1000);
+  t.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  t.classList.toggle('warn', sec >= 180 && sec < 240);   // 3 分钟起闪烁
+  t.classList.toggle('off', sec >= 240);                  // 4 分钟消失
+}
+
+function ensureQTimer(idx) {
+  if (qTimerIdx === idx && qTimerId) return;   // 同一题不重置
+  qTimerIdx = idx;
+  qTimerStart = Date.now();
+  if (qTimerId) clearInterval(qTimerId);
+  qTimerId = setInterval(tickQTimer, 500);
+  tickQTimer();
+}
+
 /* ───────────── 小工具 ───────────── */
 function el(tag, cls, html) {
   const n = document.createElement(tag);
@@ -48,6 +112,48 @@ function el(tag, cls, html) {
 function todayStr() {  const d = new Date();
   return (d.getMonth() + 1) + '月' + d.getDate() + '日';
 }
+function questionPlainText(q) {
+  const strip = h => plainText(h).trim();
+  let t = '【' + q.set + ' · 第 ' + q.no + ' 题】\n' + strip(q.stem);
+  if (q.kind === 'cond') {
+    t += '\n(1) ' + strip(q.c1) + '\n(2) ' + strip(q.c2);
+    t += '\n(A 条件(1)充分但(2)不充分 / B 条件(2)充分但(1)不充分 / C 联合充分 / D 都充分 / E 都不充分)';
+  } else {
+    (q.opts || []).forEach(function (o, i) {
+      t += '\n' + LETTERS[i] + '. ' + strip(o);
+    });
+  }
+  if (q.fig) t += '\n(原题附有图形,见刷题页面)';
+  return t;
+}
+
+function copyQuestion(q, btn) {
+  const text = questionPlainText(q);
+  const done = function () {
+    const old = btn.textContent;
+    btn.textContent = '已复制 ✓';
+    btn.classList.add('copied');
+    setTimeout(function () { btn.textContent = old; btn.classList.remove('copied'); }, 1400);
+  };
+  const fallback = function () {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { alert('复制失败,请手动选择'); }
+    ta.remove();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, fallback);
+  } else fallback();
+}
+
+function dispNo(q, i) {
+  return quiz && quiz.full ? q.no : i + 1;
+}
+
 function qMeta(q) {
   if (q.subject === 'math') {
     let t = q.set + ' · 第 ' + q.no + ' 题';
@@ -65,23 +171,17 @@ function relDays(ts) {
   const d = Math.floor((Date.now() - ts) / 86400000);
   return d <= 0 ? '今天' : d === 1 ? '昨天' : d + ' 天前';
 }
-function dueRedo(r) { return Date.now() - r.last >= 2 * 86400000; }  // 隔 2 天待重做
 
-/* ───────────── 错题与成绩记录 ───────────── */
+/* ───────────── 收录与成绩记录 ─────────────
+   错题本 = 纯收录模式:答错不自动进本,只有手动「☆ 收录」的高价值题才收录;
+   收录的题重做时答错,只累计错误次数,不自动移出。 */
 function recordResult(q, letter) {
-  if (letter === q.ans) {
-    if (wrongBook[q.id]) {
-      wrongBook[q.id].s++;
-      wrongBook[q.id].last = Date.now();
-      if (wrongBook[q.id].s >= 2) delete wrongBook[q.id];  // 连对两次,划掉
-      saveWrong();
-    }
-  } else {
-    const p = wrongBook[q.id] || { t: 0, s: 0, star: false };
-    wrongBook[q.id] = { t: p.t + 1, s: 0, last: Date.now(),
-                        pick: letter || null, star: !!p.star };
-    saveWrong();
-  }
+  if (letter === q.ans || !wrongBook[q.id]) return;
+  const r = wrongBook[q.id];
+  r.t = (r.t || 0) + 1;
+  r.pick = letter || null;
+  r.last = Date.now();
+  saveWrong();
 }
 /* 手动收录/移出:做题页的「☆ 收录」按钮 */
 function toggleStar(id) {
@@ -110,18 +210,18 @@ function startSet(kind, subjKey, setIdx) {
     title: subj.label + ' · ' + set.name,
     list: set.qs.slice(), idx: 0, ans: {}, locked: {},
     done: false, showResult: false,
-    full: true, setNo: set.no, setName: set.name
+    full: true, setNo: set.no, setName: set.name, origin: '#/'
   };
   location.hash = '#/quiz';
 }
-function startIds(ids, title, kind) {
+function startIds(ids, title, kind, origin) {
   const list = ids.map(id => BANK.qmap[id]).filter(Boolean);
   if (!list.length) { alert('没有可做的题目'); return; }
   quiz = {
     kind: kind || 'drill', mode: 'practice', subj: 'mixed',
     title: title, list: list, idx: 0, ans: {}, locked: {},
     done: false, showResult: false,
-    full: false, setNo: null
+    full: false, setNo: null, origin: origin || '#/'
   };
   location.hash = '#/quiz';
 }
@@ -133,10 +233,12 @@ function pick(i, li) {
   quiz.ans[q.id] = LETTERS[li];
   quiz.locked[q.id] = true;
   recordResult(q, quiz.ans[q.id]);
-  if (quiz.list.every(x => quiz.locked[x.id])) finishPractice();
-  else render();
+  if (quiz.list.every(x => quiz.locked[x.id])) { finishPractice(); return; }
+  render();
 }
 function finishPractice() {
+  stopQTimer();
+  localStorage.removeItem(KEY_SESSION);
   quiz.done = true; quiz.showResult = true;
   if (quiz.full) {
     const ok = quiz.list.filter(q => quiz.ans[q.id] === q.ans).length;
@@ -146,6 +248,8 @@ function finishPractice() {
 }
 function submitExam() {
   if (!quiz || quiz.done) return;
+  stopQTimer();
+  localStorage.removeItem(KEY_SESSION);
   quiz.done = true; quiz.showResult = true;
   quiz.list.forEach(q => recordResult(q, quiz.ans[q.id] || ''));
   if (quiz.full) {
@@ -166,14 +270,44 @@ function go(i) {
 }
 
 /* ───────────── 渲染分发 ───────────── */
+function renderSidebar(hash) {
+  const side = document.getElementById('side');
+  side.innerHTML = '';
+  const wrongN = Object.keys(wrongBook).length;
+  const brand = el('div', 'brand');
+  brand.append(el('div', 'brand-title', '管综冲刺刷题'));
+  brand.append(el('div', 'brand-sub', BANK.updated + ' 更新'));
+  side.append(brand);
+  const nav = el('nav', 'snav');
+  [['#/', '主页', '⌂'], ['#/drill', '专项练习', '◈'], ['#/wrong', '错题本', '★'],
+   ['#/answers', '答案速查', '☰']]
+    .forEach(function (item) {
+      const active = hash === item[0] || (item[0] !== '#/' && hash.indexOf(item[0]) === 0);
+      const a = el('a', 'sitem' + (active ? ' active' : ''));
+      a.href = item[0];
+      a.append(el('span', 'sicon', item[2]));
+      a.append(el('span', 'slabel', item[1]));
+      if (item[0] === '#/wrong' && wrongN) a.append(el('span', 'sbadge', String(wrongN)));
+      nav.append(a);
+    });
+  side.append(nav);
+  side.append(el('div', 'side-foot', '数学 ' + BANK.subjects.math.sets.reduce(function (s, x) { return s + x.qs.length; }, 0) +
+    ' 题 · 逻辑 ' + BANK.subjects.logic.sets.reduce(function (s, x) { return s + x.qs.length; }, 0) + ' 题'));
+}
+
 function render() {
   const hash = location.hash || '#/';
+  renderSidebar(hash);
   if (hash.indexOf('#/quiz') === 0) {
-    if (!quiz) { location.hash = '#/'; return; }
+    if (!quiz && !restoreSession()) { location.hash = '#/'; return; }
+    saveSession();
     renderQuiz();
     window.scrollTo(0, 0);
     return;
   }
+  if (quiz && quiz.done) localStorage.removeItem(KEY_SESSION);
+  else if (quiz) saveSession();   // 主动退出也保留断点
+  stopQTimer();
   quiz = null;
   if (hash.indexOf('#/drill') === 0) renderDrill();
   else if (hash.indexOf('#/wrong') === 0) renderWrong();
@@ -195,7 +329,7 @@ function backBar(title) {
 const HELP_HTML =
   '<h3>怎么用</h3>' +
   '<p><b>两种模式各有分工</b>:<b>练习</b> = 边做边学,选完立即判分、显示考点与解析;<b>模考</b> = 仿真卷面,答题时不显示考点、不分对错,交卷后统一出分 —— 按真题分值计分(数学满分 75、逻辑满分 60),并给出逐题成绩单,交卷前会提醒未答题数。</p>' +
-  '<p>错题收集是本站核心:答错自动进入<b>错题本</b>并记住你当时选的选项;做题时也可点 <b>☆ 收录</b> 手动收藏任意题。错题本按<b>考点汇总弱点</b>,隔 2 天提示「待重做」,重做<b>连对两次自动划掉</b>——与纸质版「三步训练法」一致。所有记录只保存在本机浏览器,换浏览器或清缓存会丢失。</p>' +
+  '<p><b>错题本是纯收录模式</b>:答错不会自动进本,由你判断价值——做题时(无论对错)点 <b>☆ 收录此题</b> 把高价值题收进来,收录的题不会自动移出,可随时手动移出。错题本按考点统计收录分布,支持导出打印版 PDF 重做。所有记录只保存在本机浏览器,换浏览器或清缓存会丢失。</p>' +
   '<h3>如何更新题库</h3>' +
   '<ol>' +
   '<li>题库源文件:<code>gzbuild/math_data.py</code> 与 <code>gzbuild/logic_data.py</code>,直接增删改题目;</li>' +
@@ -222,21 +356,65 @@ function renderHome() {
     ' 套 · 题库更新于 ' + BANK.updated));
   w.append(head);
 
+  const sess = loadSession();
+  if (sess && sess.ids) {
+    const valid = sess.ids.filter(id => BANK.qmap[id]);
+    if (valid.length) {
+      const answered = Object.keys(sess.mode === 'exam' ? (sess.ans || {}) : (sess.locked || {})).length;
+      const rc = el('div', 'card sec resumecard');
+      const info = el('div', 'rinfo');
+      info.append(el('div', 'rtitle', '⏵ ' + sess.title));
+      info.append(el('div', 'rmeta', '做到第 ' + ((sess.idx || 0) + 1) + ' 题 / 共 ' + valid.length +
+        ' 题' + (answered ? ' · 已答 ' + answered : '')));
+      rc.append(info);
+      const cont = el('button', 'btn small', '继续');
+      cont.onclick = function () { location.hash = '#/quiz'; };
+      const drop = el('button', 'btn ghost small', '放弃');
+      drop.onclick = function () {
+        localStorage.removeItem(KEY_SESSION);
+        render();
+      };
+      const acts = el('div', 'setacts');
+      acts.append(cont, drop);
+      rc.append(acts);
+      w.append(rc);
+    }
+  }
+  const homegrid = el('div', 'homegrid');
   Object.keys(BANK.subjects).forEach(function (key) {
     const subj = BANK.subjects[key];
-    const sec = el('section', 'card sec');
-    sec.append(el('h2', 'sec-title', subj.label));
-    let lastGroup = null;
-    subj.sets.forEach(function (set, i) {
-      if (set.group !== lastGroup) {
-        sec.append(el('div', 'grouprow', set.group));
-        lastGroup = set.group;
+    const sec = el('section', 'card sec hsec');
+    sec.append(el('h2', 'sec-title', subj.label + ' · ' + subj.sets.length + ' 套'));
+    // 分组渲染:真题展开置顶,其余折叠
+    const groups = {};
+    subj.sets.forEach(function (set) {
+      (groups[set.group] = groups[set.group] || []).push(set);
+    });
+    const gnames = Object.keys(groups);
+    gnames.forEach(function (gname) {
+      const gsets = groups[gname];
+      const gtag = gname === '历年真题';
+      let box = sec;
+      if (!gtag) {
+        box = el('details', 'foldgroup');
+        const sm = el('summary', '', '<b>' + gname + '</b><span class="catcnt">' +
+          gsets.length + ' 套 · ' + gsets.reduce(function (s, x) { return s + x.qs.length; }, 0) + ' 题 ▾</span>');
+        box.append(sm);
+        sec.append(box);
+      } else {
+        sec.append(el('div', 'grouprow', gname));
       }
+      gsets.forEach(function (set) {
+        const gi = subj.sets.indexOf(set);
+        appendSetRow(box, set, gi, key);
+      });
+    });
+    function appendSetRow(container, set, i, key) {
+      const sec2 = container;
       const row = el('div', 'setrow');
       row.append(el('div', 'setname', set.name));
-      row.append(el('div', 'setmeta', set.qs.length + ' 题'));
       const best = bestScore(key, set.no);
-      if (best) row.append(el('div', 'setbest', '最好 ' + best.ok + '/' + best.total));
+      row.append(el('div', 'setmeta', set.qs.length + ' 题' + (best ? ' · 最好 ' + best.ok + '/' + best.total : '')));
       const acts = el('div', 'setacts');
       const p = el('button', 'btn small', '练习');
       p.setAttribute('data-subj', key); p.setAttribute('data-set', String(i)); p.setAttribute('data-mode', 'practice');
@@ -246,24 +424,13 @@ function renderHome() {
       e.onclick = () => startSet('exam', key, i);
       acts.append(p, e);
       row.append(acts);
-      sec.append(row);
-    });
-    w.append(sec);
+      container.append(row);
+    }
+    homegrid.append(sec);
   });
+  w.append(homegrid);
 
   const wrongN = Object.keys(wrongBook).length;
-  const dueN = Object.keys(wrongBook).filter(id => wrongBook[id] && dueRedo(wrongBook[id])).length;
-  const sc = el('div', 'shortcuts');
-  const d = el('button', 'card scard', '<b>专项练习</b><span>按考点 / 题型刷</span>');
-  d.onclick = () => { location.hash = '#/drill'; };
-  const wb = el('button', 'card scard', '<b>错题本</b><span>' +
-    (wrongN ? (dueN ? wrongN + ' 题 · ' + dueN + ' 题待重做' : '待消灭 ' + wrongN + ' 题') : '暂无错题') + '</span>');
-  wb.onclick = () => { location.hash = '#/wrong'; };
-  const an = el('button', 'card scard', '<b>答案速查</b><span>答案 · 考点 · 通法卡</span>');
-  an.onclick = () => { location.hash = '#/answers'; };
-  sc.append(d, wb, an);
-  w.append(sc);
-
   if (hist.length) {
     const hc = el('section', 'card sec');
     hc.append(el('h2', 'sec-title', '最近成绩'));
@@ -305,10 +472,18 @@ function navCls(q, i) {
 function analysisPanel(q, chosen) {
   const p = el('div', 'panel');
   let html = '<div class="ansline">答案 <b class="ansletter">' + q.ans + '</b>';
+  if (q.kind === 'cond') html += '<span class="ansmeaning">' + COND_OPTS[LETTERS.indexOf(q.ans)] + '</span>';
   if (chosen && chosen !== q.ans) html += '<span class="yourbad">你的答案:' + chosen + '</span>';
   else if (chosen) html += '<span class="yourok">✓ 答对</span>';
   else if (quiz && quiz.done) html += '<span class="yourbad">未作答</span>';
   html += '</div>';
+  const collect = el('button', 'btn ghost small collect-btn',
+    wrongBook[q.id] ? '★ 已收录' : '☆ 收录此题');
+  collect.onclick = function () {
+    toggleStar(q.id);
+    collect.textContent = wrongBook[q.id] ? '★ 已收录' : '☆ 收录此题';
+  };
+
   if (Array.isArray(q.sol)) {
     // 兼容旧数据:行列表
     q.sol.forEach(function (ln) {
@@ -323,6 +498,7 @@ function analysisPanel(q, chosen) {
   }
   if (q.trap) html += '<div class="trap">' + q.trap + '</div>';
   p.innerHTML = html;
+  p.append(collect);
   return p;
 }
 
@@ -333,6 +509,10 @@ function questionCard(i) {
   // 模考交卷前不显示考点/题型,仿真卷面
   const showTag = !(quiz.mode === 'exam' && !quiz.done);
   meta.append(el('span', '', showTag ? qMeta(q) : ('卷' + q.set + ' · 第 ' + q.no + ' 题')));
+  const cpBtn = el('button', 'meta-copy', '📋 复制');
+  cpBtn.title = '复制本题完整文本(出处+题干+选项),便于到其他工具查原题';
+  cpBtn.onclick = function () { copyQuestion(q, cpBtn); };
+  meta.append(cpBtn);
   const starBtn = el('button', 'starbtn', starLabel(q.id));
   starBtn.title = '收录到错题本 / 从错题本移出';
   starBtn.onclick = function () { toggleStar(q.id); starBtn.innerHTML = starLabel(q.id); };
@@ -340,26 +520,23 @@ function questionCard(i) {
   cardEl.append(meta);
 
   const stem = el('div', 'qstem');
-  stem.innerHTML = '<span class="qno">' + (i + 1) + '.</span> ' + q.stem +
+  stem.innerHTML = '<span class="qno">' + dispNo(q, i) + '.</span> ' + q.stem +
     '<span class="blank"></span>';
   cardEl.append(stem);
-
-  if (q.kind === 'cond') {
-    cardEl.append(el('div', 'cond', '(1) ' + q.c1));
-    cardEl.append(el('div', 'cond', '(2) ' + q.c2));
-    const d = el('details', 'rubric');
-    d.append(el('summary', '', '条件充分性判断 · 选项说明'));
-    d.append(el('div', 'rubricbody', COND_RUBRIC));
-    cardEl.append(d);
+  if (q.fig) {
+    const img = el('img', 'qfig');
+    img.src = q.fig;
+    img.alt = '原题图示';
+    cardEl.append(img);
   }
 
   const chosen = quiz.ans[q.id];
   const reveal = quiz.done || !!quiz.locked[q.id];
   const grid = el('div', 'optgrid');
-  q.opts.forEach(function (o, li) {
-    const L = LETTERS[li];
+
+  function optButton(L, txt) {
     const b = el('button', 'opt');
-    b.innerHTML = '<span class="ol">' + L + '</span><span class="ot">' + o + '</span>';
+    b.innerHTML = '<span class="ol">' + L + '</span><span class="ot">' + txt + '</span>';
     const isChosen = chosen === L, isAns = q.ans === L;
     if (reveal) {
       if (isAns) b.classList.add('ok');
@@ -368,10 +545,18 @@ function questionCard(i) {
       b.disabled = true;
     } else {
       if (isChosen) b.classList.add('chosen');
-      b.onclick = () => pick(i, li);
+      b.onclick = () => pick(i, LETTERS.indexOf(L));
     }
-    grid.append(b);
-  });
+    return b;
+  }
+
+  if (q.kind === 'cond') {
+    cardEl.append(el('div', 'cond', '(1) ' + q.c1));
+    cardEl.append(el('div', 'cond', '(2) ' + q.c2));
+    COND_OPTS.forEach(function (txt, li) { grid.append(optButton(LETTERS[li], txt)); });
+  } else {
+    q.opts.forEach(function (o, li) { grid.append(optButton(LETTERS[li], o)); });
+  }
   cardEl.append(grid);
 
   if (reveal) cardEl.append(analysisPanel(q, chosen));
@@ -436,7 +621,8 @@ function resultView() {
   const grid = el('div', 'chipgrid');
   quiz.list.forEach(function (q, i) {
     const a = quiz.ans[q.id];
-    const chip = el('button', 'chip ' + (a == null ? 'un' : a === q.ans ? 'ok' : 'bad'), String(i + 1));
+    const chip = el('button', 'chip ' + (a == null ? 'un' : a === q.ans ? 'ok' : 'bad'), String(dispNo(q, i)));
+    chip.title = q.set + ' · ' + (quiz.full ? '第 ' + q.no + ' 题' : '原卷第 ' + q.no + ' 题');
     chip.onclick = function () { quiz.showResult = false; quiz.idx = i; render(); };
     grid.append(chip);
   });
@@ -458,13 +644,14 @@ function resultView() {
   }
 
   const acts = el('div', 'actions');
-  const home = el('button', 'btn ghost', '返回主页');
-  home.onclick = function () { quiz = null; location.hash = '#/'; };
+  const org = quiz.origin || '#/';
+  const home = el('button', 'btn ghost', org === '#/drill' ? '返回专项练习' : org === '#/wrong' ? '返回错题本' : '返回主页');
+  home.onclick = function () { const o = org; quiz = null; location.hash = o; };
   acts.append(home);
   const wrongIds = quiz.list.filter(q => quiz.ans[q.id] !== q.ans).map(q => q.id);
   if (wrongIds.length) {
     const b = el('button', 'btn', '重刷本次错题(' + wrongIds.length + ')');
-    b.onclick = function () { startIds(wrongIds, '错题重刷 · ' + quiz.title, 'redo'); };
+    b.onclick = function () { startIds(wrongIds, '错题重刷 · ' + quiz.title, 'redo', quiz.origin || '#/'); };
     acts.append(b);
   }
   c.append(acts);
@@ -479,24 +666,33 @@ function renderQuiz() {
   const back = el('button', 'btn ghost small', quiz.done && quiz.showResult ? '返回主页' : '← 退出');
   back.onclick = function () {
     if (!quiz.done && quiz.mode === 'exam' && !confirm('模考未交卷,确定退出?')) return;
-    quiz = null; location.hash = '#/';
+    const org = quiz && quiz.origin ? quiz.origin : '#/';
+    quiz = null; location.hash = org;
   };
   bar.append(back);
   bar.append(el('div', 'topbar-title', quiz.title));
   const right = el('div', 'topbar-right');
+  if (!quiz.done) {
+    const qt = el('span', 'qtimer', '0:00');
+    qt.id = 'qtimer';
+    qt.title = '本题用时(3 分钟后闪烁提醒,4 分钟隐去)';
+    right.append(qt);
+  }
   if (quiz.mode === 'exam' && !quiz.done) {
     const b = el('button', 'btn small', '交卷');
     b.onclick = function () { confirmSubmit(); };
     right.append(b);
   }
   bar.append(right);
+  if (!quiz.done) ensureQTimer(quiz.idx); else stopQTimer();
   $app.append(bar);
 
   if (quiz.done && quiz.showResult) { $app.append(resultView()); return; }
 
   const nav = el('div', 'navgrid');
   quiz.list.forEach(function (q, i) {
-    const b = el('button', 'nv' + navCls(q, i), String(i + 1));
+    const b = el('button', 'nv' + navCls(q, i), String(dispNo(q, i)));
+    if (!quiz.full) b.title = q.set + ' · 原卷第 ' + q.no + ' 题';
     b.onclick = function () { go(i); };
     nav.append(b);
   });
@@ -505,11 +701,17 @@ function renderQuiz() {
   $app.append(questionCard(quiz.idx));
 }
 
-/* ───────────── 专项练习 ───────────── */
+/* ───────────── 专项练习(扁平:细分即卡片) ───────────── */
+function drillInOrder(ids) { return ids.slice(); }
+
+function drillRandom(ids) {
+  return ids.slice().sort(function () { return Math.random() - 0.5; }).slice(0, 10);
+}
+
 function renderDrill() {
   $app.innerHTML = '';
   const w = el('div', 'wrap');
-  w.append(backBar('专项练习'));
+  w.append(el('h2', 'pagetitle', '专项练习'));
 
   const tabs = el('div', 'tabs');
   Object.keys(BANK.subjects).forEach(function (key) {
@@ -520,30 +722,41 @@ function renderDrill() {
   w.append(tabs);
 
   const subj = BANK.subjects[drillSubj];
+  const grid = el('div', 'drillgrid');
   subj.cats.forEach(function (cat) {
-    const cnt = cat.subs.reduce((s, x) => s + x.ids.length, 0);
-    const d = el('details', 'card cat');
-    d.append(el('summary', '', '<b>' + cat.g + '</b><span class="catcnt">' + cnt + ' 题</span>'));
-    const all = el('button', 'btn ghost small', '整组练习');
-    all.onclick = function () {
-      startIds(cat.subs.flatMap(x => x.ids), subj.label + ' 专项 · ' + cat.g, 'drill');
-    };
-    d.append(all);
-    cat.subs.forEach(function (s) {
-      const row = el('div', 'subrow');
-      row.append(el('span', 'subname', s.n));
-      row.append(el('span', 'subcnt', s.ids.length + ' 题'));
-      const b = el('button', 'btn small', '开始');
-      b.onclick = function () { startIds(s.ids, subj.label + ' 专项 · ' + s.n, 'drill'); };
-      row.append(b);
-      d.append(row);
-    });
-    w.append(d);
+    grid.append(el('div', 'grouprow', cat.g));
+    cat.subs.slice().sort(function (a, b) { return b.ids.length - a.ids.length; })
+      .forEach(function (s) {
+        if (s.ids.length < 2) return;  // 单题细分不单列
+        const wrongN = s.ids.filter(function (id) { return wrongBook[id]; }).length;
+        const card = el('div', 'dcard flat');
+        const head = el('div', 'dcard-head');
+        head.append(el('span', 'dcard-name', s.n.replace(/^(数学|逻辑)/, '')));
+        const right = el('span', 'dcard-right');
+        if (wrongN) right.append(el('span', 'dcard-wrong', '错 ' + wrongN));
+        right.append(el('span', 'dcard-n', s.ids.length + ' 题'));
+        head.append(right);
+        card.append(head);
+        const acts = el('div', 'dcard-acts');
+        const all = el('button', 'btn small', '全部 ' + s.ids.length);
+        all.onclick = function () {
+          startIds(drillInOrder(s.ids), subj.label + ' · ' + cat.g + ' · ' + s.n, 'drill', '#/drill');
+        };
+        const rnd = el('button', 'btn ghost small', '随机');
+        rnd.title = '随机抽 10 题';
+        rnd.onclick = function () {
+          startIds(drillRandom(s.ids), subj.label + ' · ' + cat.g + ' · ' + s.n + ' · 随机', 'drill', '#/drill');
+        };
+        acts.append(all, rnd);
+        card.append(acts);
+        grid.append(card);
+      });
   });
+  w.append(grid);
   $app.append(w);
 }
 
-/* ───────────── 错题本 ───────────── */
+/* ───────────── 错题本 ───────────── *//* ───────────── 错题本 ───────────── *//* ───────────── 错题本 ───────────── *//* ───────────── 错题本 ───────────── */
 function wrongRowMeta(r) {
   const parts = [];
   parts.push(r.t > 0 ? '错 ' + r.t + ' 次' : '手动收录');
@@ -556,17 +769,19 @@ function wrongRowMeta(r) {
 function renderWrong() {
   $app.innerHTML = '';
   const w = el('div', 'wrap');
-  w.append(backBar('错题本'));
+  w.append(el('h2', 'pagetitle', '错题本'));
 
   const ids = Object.keys(wrongBook).filter(id => BANK.qmap[id]);
   if (!ids.length) {
     w.append(el('div', 'card empty',
-      '错题本是空的。<br>答错的题自动收进来;做题时也可以点「☆ 收录」手动收藏;<br>重做连对两次自动划掉。'));
+      '收录是空的。<br>做题时(无论对错)点「☆ 收录此题」,把值得重做的高价值题收进来;<br>收录不会自动移出,由你手动管理。'));
     $app.append(w);
     return;
   }
 
-  // ── 薄弱点可视化:按考点/题型统计 ──
+  const c = el('div', 'card sec');
+
+  // ── 收录分布:按考点/题型统计 ──
   const stats = {};
   ids.forEach(function (id) {
     const q = BANK.qmap[id];
@@ -579,12 +794,11 @@ function renderWrong() {
   const keys = Object.keys(stats).sort((a, b) => stats[b].n - stats[a].n);
   const maxN = stats[keys[0]].n;
 
-  const c = el('div', 'card sec');
-  c.append(el('h2', 'sec-title', '待消灭 ' + ids.length + ' 题 · 薄弱点分布'));
+  c.append(el('h2', 'sec-title', '已收录 ' + ids.length + ' 题 · 收录分布'));
   const chart = el('div', 'statchart');
   keys.forEach(function (g) {
     const row = el('button', 'statrow');
-    row.title = '点击刷「' + g + '」的错题';
+    row.title = '点击刷「' + g + '」的收录题';
     row.append(el('span', 'statname', g));
     const barWrap = el('div', 'statbar');
     const bar = el('div', 'statbar-fill');
@@ -592,16 +806,16 @@ function renderWrong() {
     barWrap.append(bar);
     row.append(barWrap);
     row.append(el('span', 'statn', String(stats[g].n)));
-    row.onclick = function () { startIds(stats[g].ids.slice().sort(), '错题本 · ' + g, 'redo'); };
+    row.onclick = function () { startIds(stats[g].ids.slice().sort(), '收录 · ' + g, 'redo', '#/wrong'); };
     chart.append(row);
   });
   c.append(chart);
 
-  // ── 过滤:全部 / 待重做 / 手动收录 ──
-  const dueIds = ids.filter(id => dueRedo(wrongBook[id]));
-  const starIds = ids.filter(id => wrongBook[id].star);
+  // ── 科目过滤 ──
+  const mathIds = ids.filter(id => BANK.qmap[id].subject === 'math');
+  const logicIds = ids.filter(id => BANK.qmap[id].subject === 'logic');
   const tabs = el('div', 'tabs');
-  [['all', '全部 ' + ids.length], ['due', '待重做 ' + dueIds.length], ['star', '手动收录 ' + starIds.length]]
+  [['all', '全部 ' + ids.length], ['math', '数学 ' + mathIds.length], ['logic', '逻辑 ' + logicIds.length]]
     .forEach(function (pair) {
       const t = el('button', 'tab' + (wrongFilter === pair[0] ? ' active' : ''), pair[1]);
       t.onclick = function () { wrongFilter = pair[0]; render(); };
@@ -610,27 +824,23 @@ function renderWrong() {
   c.append(tabs);
 
   const filtered = ids.filter(function (id) {
-    if (wrongFilter === 'due') return dueRedo(wrongBook[id]);
-    if (wrongFilter === 'star') return !!wrongBook[id].star;
+    if (wrongFilter === 'math') return BANK.qmap[id].subject === 'math';
+    if (wrongFilter === 'logic') return BANK.qmap[id].subject === 'logic';
     return true;
   }).sort();
 
-  if (!filtered.length) {
-    c.append(el('div', 'empty2', wrongFilter === 'due'
-      ? '没有隔天待重做的题。按「三步训练法」,收录满 2 天的题会出现在这里。'
-      : '这里还没有手动收录的题。做题时点「☆ 收录」即可收藏任意题。'));
-  }
   filtered.forEach(function (id) {
     const q = BANK.qmap[id];
     const r = wrongBook[id];
     const row = el('div', 'setrow wrongrow');
     row.append(el('div', 'setname small', qMeta(q)));
-    row.append(el('div', 'setmeta', wrongRowMeta(r)));
-    if (r.t > 0 && r.s > 0) row.append(el('span', 'streak', '●'.repeat(Math.min(r.s, 2))));
+    const parts = ['收录 ' + relDays(r.last)];
+    if (r.t > 0) parts.push('重做错 ' + r.t + ' 次' + (r.pick ? '(选 ' + r.pick + ')' : ''));
+    row.append(el('div', 'setmeta', parts.join(' · ')));
     const redo = el('button', 'btn ghost small', '重做');
-    redo.onclick = function () { startIds([id], '错题重做 · ' + subjLabel(q) + '第 ' + q.no + ' 题', 'redo'); };
+    redo.onclick = function () { startIds([id], '收录重做 · ' + subjLabel(q) + '第 ' + q.no + ' 题', 'redo', '#/wrong'); };
     const del = el('button', 'btn ghost small', '×');
-    del.title = '从错题本移出';
+    del.title = '从收录移出';
     del.onclick = function () { delete wrongBook[id]; saveWrong(); render(); };
     row.append(redo, del);
     c.append(row);
@@ -638,19 +848,14 @@ function renderWrong() {
 
   const acts = el('div', 'actions');
   const all = el('button', 'btn', '复习全部(' + ids.length + ')');
-  all.onclick = function () { startIds(ids.slice().sort(), '错题本复习(' + ids.length + ' 题)', 'redo'); };
+  all.onclick = function () { startIds(ids.slice().sort(), '收录复习(' + ids.length + ' 题)', 'redo', '#/wrong'); };
   acts.append(all);
-  if (dueIds.length) {
-    const due = el('button', 'btn ghost', '只复习待重做(' + dueIds.length + ')');
-    due.onclick = function () { startIds(dueIds.slice().sort(), '错题本 · 待重做(' + dueIds.length + ' 题)', 'redo'); };
-    acts.append(due);
-  }
   const pdf = el('button', 'btn ghost', '导出打印版 PDF');
   pdf.onclick = function () { exportWrongPDF(); };
   acts.append(pdf);
-  const clr = el('button', 'btn ghost', '清空错题本');
+  const clr = el('button', 'btn ghost', '清空收录');
   clr.onclick = function () {
-    if (confirm('确定清空错题本?')) { wrongBook = {}; wrongFilter = 'all'; saveWrong(); render(); }
+    if (confirm('确定清空全部收录?')) { wrongBook = {}; wrongFilter = 'all'; saveWrong(); render(); }
   };
   acts.append(clr);
   c.append(acts);
@@ -676,13 +881,15 @@ function buildWrongPrintHTML() {
         esc2(strip(q.tag || (q.cat ? q.cat + '·' + q.type : ''))) +
         ' ｜ 错 ' + (r.t || 1) + ' 次' + (r.pick ? ' · 曾选 ' + r.pick : (r.star ? ' · 手动收录' : '')) + '</div>';
       body += '<div class="qstem">' + q.stem + '<span class="blank"></span></div>';
+      if (q.fig) body += '<img class="qfig" src="' + q.fig + '"/>';
       if (q.kind === 'cond') {
         body += '<div class="cond">(1) ' + q.c1 + '</div><div class="cond">(2) ' + q.c2 + '</div>';
+        body += '<div class="condopt">A 条件(1)充分　B 条件(2)充分　C 联合充分　D 都充分　E 都不充分</div>';
       }
       (q.opts || []).forEach(function (o, li) {
         body += '<div class="opt' + (LETTERS[li] === q.ans ? ' okopt' : '') + '"><b>' + LETTERS[li] + '.</b> ' + o + '</div>';
       });
-      body += '<div class="ans">【答案】' + q.ans + '</div>';
+      body += '<div class="ans">【答案】' + q.ans + (q.kind === 'cond' ? '（' + (COND_OPTS[LETTERS.indexOf(q.ans)] || '') + '）' : '') + '</div>';
       if (q.sol) body += '<div class="solprint">' + q.sol + '</div>';
       if (q.trap) body += '<div class="qtrap">' + q.trap + '</div>';
       body += '</div>';
@@ -704,7 +911,7 @@ function buildWrongPrintHTML() {
     '.ans{font-weight:700;margin-top:6px}' +
     '.solprint{color:#333}' +
     '.qtrap{color:#a08a4f;font-size:11.5px;margin-top:3px}' +
-    '@page{margin:14mm 12mm}' +
+    '@page{size:A4;margin:14mm 12mm}' +
     '</style></head><body>' +
     '<h1>错题本 · 打印版</h1>' +
     '<div class="sub">共 ' + ids.length + ' 题 · 生成于 ' + new Date().toLocaleDateString('zh-CN') +
@@ -712,20 +919,42 @@ function buildWrongPrintHTML() {
 }
 
 function exportWrongPDF() {
-  const html = buildWrongPrintHTML();
-  const w = window.open('', '_blank');
-  if (!w) { alert('浏览器拦截了弹窗,请允许本站弹窗后重试'); return; }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 400);
+  const ids = Object.keys(wrongBook).filter(id => BANK.qmap[id]);
+  if (!ids.length) { alert('收录是空的'); return; }
+  const strip = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent; };
+  const items = ids.map(function (id) {
+    const q = BANK.qmap[id], r = wrongBook[id] || {};
+    return { subject: q.subject, set: q.set, no: q.no, kind: q.kind,
+             tag: strip(q.tag || (q.cat ? q.cat + '·' + q.type : '')),
+             stem: q.stem, opts: q.opts, c1: q.c1, c2: q.c2,
+             ans: q.ans, sol: q.sol || '', trap: q.trap || '',
+             t: r.t || 1, pick: r.pick || null };
+  });
+  const payload = { count: items.length, date: new Date().toLocaleDateString('zh-CN'), items: items };
+  fetch('/wrongbook-pdf', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload) })
+    .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.blob(); })
+    .then(function (blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '错题本_重做版.pdf';
+      document.body.append(a); a.click(); a.remove();
+    })
+    .catch(function () {
+      // file:// 直开等无法连服务器时,退回浏览器打印(同样 A4 排版)
+      const w = window.open('', '_blank');
+      if (!w) { alert('无法连接导出服务,且浏览器拦截了弹窗;请通过本地服务器访问后重试'); return; }
+      w.document.open(); w.document.write(buildWrongPrintHTML()); w.document.close();
+      setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 400);
+    });
 }
 
 /* ───────────── 答案速查 ───────────── */
 function renderAnswers() {
   $app.innerHTML = '';
   const w = el('div', 'wrap');
-  w.append(backBar('答案速查'));
+  w.append(el('h2', 'pagetitle', '答案速查'));
 
   const tabs = el('div', 'tabs');
   Object.keys(BANK.subjects).forEach(function (key) {
@@ -794,6 +1023,9 @@ function openQuestionModal(q) {
   const card = el('div', 'modal-card');
   const head = el('div', 'modal-head');
   head.append(el('div', 'modal-title', qMeta(q)));
+  const cpBtn = el('button', 'meta-copy', '📋 复制');
+  cpBtn.onclick = function () { copyQuestion(q, cpBtn); };
+  head.append(cpBtn);
   const x = el('button', 'modal-close', '×');
   x.onclick = function () { overlay.remove(); };
   head.append(x);
@@ -803,20 +1035,27 @@ function openQuestionModal(q) {
   const stem = el('div', 'qstem');
   stem.innerHTML = q.stem + '<span class="blank"></span>';
   body.append(stem);
+  if (q.fig) {
+    const img = el('img', 'qfig');
+    img.src = q.fig;
+    body.append(img);
+  }
+  const grid = el('div', 'optgrid');
   if (q.kind === 'cond') {
     body.append(el('div', 'cond', '(1) ' + q.c1));
     body.append(el('div', 'cond', '(2) ' + q.c2));
-    const d = el('details', 'rubric');
-    d.append(el('summary', '', '条件充分性判断 · 选项说明'));
-    d.append(el('div', 'rubricbody', COND_RUBRIC));
-    body.append(d);
+    COND_OPTS.forEach(function (txt, li) {
+      const b = el('div', 'opt' + (LETTERS[li] === q.ans ? ' ok' : ''));
+      b.innerHTML = '<span class="ol">' + LETTERS[li] + '</span><span class="ot">' + txt + '</span>';
+      grid.append(b);
+    });
+  } else {
+    (q.opts || []).forEach(function (o, li) {
+      const b = el('div', 'opt' + (LETTERS[li] === q.ans ? ' ok' : ''));
+      b.innerHTML = '<span class="ol">' + LETTERS[li] + '</span><span class="ot">' + o + '</span>';
+      grid.append(b);
+    });
   }
-  const grid = el('div', 'optgrid');
-  (q.opts || []).forEach(function (o, li) {
-    const b = el('div', 'opt' + (LETTERS[li] === q.ans ? ' ok' : ''));
-    b.innerHTML = '<span class="ol">' + LETTERS[li] + '</span><span class="ot">' + o + '</span>';
-    grid.append(b);
-  });
   body.append(grid);
   body.append(analysisPanel(q, null));
   card.append(body);
@@ -824,6 +1063,27 @@ function openQuestionModal(q) {
   overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
   document.body.append(overlay);
 }
+
+/* ───────────── 触屏滑动换题 ───────────── */
+let tsX = 0, tsY = 0;
+
+function handleSwipe(dx, dy) {
+  if (!quiz || quiz.done || quiz.showResult) return false;
+  if (location.hash.indexOf('#/quiz') !== 0) return false;
+  if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    if (dx < 0 && quiz.idx < quiz.list.length - 1) { go(quiz.idx + 1); return true; }
+    if (dx > 0 && quiz.idx > 0) { go(quiz.idx - 1); return true; }
+  }
+  return false;
+}
+
+document.addEventListener('touchstart', function (e) {
+  tsX = e.changedTouches[0].clientX;
+  tsY = e.changedTouches[0].clientY;
+}, { passive: true });
+document.addEventListener('touchend', function (e) {
+  handleSwipe(e.changedTouches[0].clientX - tsX, e.changedTouches[0].clientY - tsY);
+}, { passive: true });
 
 /* ───────────── 键盘操作 ───────────── */
 document.addEventListener('keydown', function (e) {
