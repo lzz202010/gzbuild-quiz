@@ -404,3 +404,78 @@ body{font-size:16px}
   border-radius:6px;padding:1px 8px;font-size:11.5px;cursor:pointer}
 .meta-copy:hover{border-color:var(--accent);color:var(--accent)}
 .meta-copy.copied{border-color:var(--ok);color:var(--ok)}
+
+/* ── 手机端整体适配(≤560px) ── */
+@media (max-width:560px){
+  #app{padding:8px 10px calc(74px + env(safe-area-inset-bottom))}
+  .hero{padding:12px 2px 0}
+  h1{font-size:23px;margin:8px 0 4px}
+  .badge{font-size:11px;padding:2px 10px}
+  .hero-sub{font-size:12px;line-height:1.55;padding:0 6px}
+  .pagetitle{font-size:19px;margin:0 0 8px}
+  .sec{padding:12px 12px}
+  .sec-title{font-size:15px}
+
+  /* 专项练习:手机上两列,卡片收紧 */
+  .drillgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .dcard{padding:9px 10px;gap:6px;border-radius:10px}
+  .dcard-name{font-size:13.5px}
+  .dcard-n{font-size:11px}
+  .dcard-wrong{font-size:10px;padding:1px 5px}
+  .dcard-acts{display:flex;gap:6px}
+  .dcard-acts .btn{flex:1;justify-content:center;padding:5px 4px;font-size:11.5px;
+    border-radius:8px;white-space:nowrap}
+  .grouprow{font-size:12px;margin:8px 0 0;padding:4px 2px}
+
+  /* 做题页顶栏与题目卡 */
+  .topbar{gap:6px;padding:7px 0;margin-bottom:8px}
+  .topbar .btn.small{padding:4px 9px;font-size:12px;white-space:nowrap}
+  .topbar-title{font-size:12.5px}
+  .topbar-right{flex:0 0 auto}
+  .qtimer{font-size:12px}
+  .navgrid{gap:5px}
+  .nv{width:30px;height:30px;font-size:12px;border-radius:8px}
+  .qcard{padding:11px 12px 13px}
+  .qmeta{font-size:12px;flex-wrap:wrap;row-gap:6px}
+  .qmeta>span:first-child{flex:1 1 100%;min-width:0;white-space:normal}
+  .meta-copy{font-size:11px;padding:1px 7px;white-space:nowrap}
+  .starbtn{font-size:11.5px;white-space:nowrap;margin-left:0}
+  .qstem{font-size:15px;line-height:1.78}
+  .opt{font-size:14px;padding:8px 11px;line-height:1.5;gap:8px;border-radius:9px}
+  .opt .ol{font-size:14px}
+  .chipgrid{grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:5px}
+  .chip{height:31px;font-size:12.5px;border-radius:8px}
+  .qfig{max-width:100%;height:auto}
+  .blank{min-width:1.6em;margin-left:2px}
+
+  /* 首页更紧凑 */
+  .hero-sub{font-size:11.5px;line-height:1.5}
+  .hsec .setrow{padding:6px 0;row-gap:0}
+  .hsec .setname{font-size:13px}
+  .hsec .setacts .btn{padding:3px 9px;font-size:11.5px;border-radius:8px}
+  .hsec .setmeta{font-size:10.5px;margin-top:-1px}
+  .hsec .grouprow{padding:7px 2px 0;font-size:10.5px}
+  details.sec{padding:9px 12px}
+  details>summary{padding:1px 0;gap:6px}
+  details>summary b{font-size:14px}
+  .catcnt{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* 列表/答案速查/错题本 */
+  .setrow{padding:8px 0;gap:8px}
+  .setname{font-size:13.5px}
+  .setmeta{font-size:11px}
+  .setfilter{flex-wrap:nowrap;overflow-x:auto;padding-right:14px;
+    mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  .fchip{padding:4px 10px;font-size:12px}
+  .actions{flex-wrap:wrap;gap:8px}
+  .actions .btn{flex:1 1 45%;justify-content:center}
+}
+@media (max-width:380px){
+  .drillgrid{gap:6px}
+  .dcard{padding:8px 9px}
+  .dcard-name{font-size:12.5px}
+  .dcard-acts .btn{font-size:11px;padding:4px 2px}
+  .dcard-n{font-size:10px}
+  .qstem{font-size:14.5px}
+  .opt{font-size:13.5px}
+}
