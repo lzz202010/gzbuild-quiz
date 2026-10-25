@@ -310,10 +310,12 @@ body{
 .drillopts .grow{margin-left:auto}
 
 /* ── 结构化数学记法 ── */
-.fr{display:inline-flex;flex-direction:column;align-items:center;
-  vertical-align:-0.55em;font-size:.8em;line-height:1.15;margin:0 1px}
-.fr .fn{padding:0 2px;border-bottom:1.3px solid currentColor}
-.fr .fd{padding:0 2px}
+/* 分数用 inline-block + 垂直居中。inline-flex 的基线取分子那行,会把整块压到
+   基线下,看起来"分数下沉、和逗号/下一行错位"。inline-block 让 middle 对齐整块中心。 */
+.fr{display:inline-block;vertical-align:middle;text-align:center;
+  font-size:.82em;line-height:1.08;margin:0 2px;position:relative;top:-.04em}
+.fr .fn{display:block;padding:0 3px;border-bottom:1.2px solid currentColor}
+.fr .fd{display:block;padding:0 3px}
 .rd{border-top:1.3px solid currentColor;padding:0 1px}
 
 

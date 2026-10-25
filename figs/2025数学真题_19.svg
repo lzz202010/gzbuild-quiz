@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 320" role="img" aria-label="菱形 ABCD，M、N 分别为 AD、CD 中点，P 在 AC 上">
+  <rect width="380" height="320" fill="#fff"/>
+  <g fill="none" stroke="#1e2628" stroke-width="2">
+    <path d="M40 160 L190 270 L340 160 L190 50 Z"/>
+    <path d="M40 160 L340 160"/>
+    <path d="M115 105 L225 174"/>
+    <path d="M265 105 L225 174"/>
+  </g>
+  <g fill="#9b2c2c">
+    <circle cx="225" cy="174" r="4"/>
+  </g>
+  <g font-family="Songti SC, SimSun, serif" font-size="19" fill="#1e2628">
+    <text x="22" y="155">A</text><text x="182" y="292">B</text><text x="348" y="155">C</text><text x="182" y="38">D</text>
+    <text x="96" y="98">M</text><text x="270" y="98">N</text><text x="214" y="198">P</text>
+  </g>
+</svg>
