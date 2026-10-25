@@ -1,0 +1,256 @@
+:root{
+  --bg:#f4f4f1; --card:#ffffff; --ink:#22221f; --muted:#83817a;
+  --line:#e6e4dc; --accent:#1c7796; --accent-soft:#e7f1f5;
+  --ok:#2f8f5b; --ok-soft:#e9f5ee; --bad:#c2453a; --bad-soft:#fbeeed;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+        "Microsoft YaHei","Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+#app{max-width:820px;margin:0 auto;padding:14px 16px 70px}
+.wrap{display:flex;flex-direction:column;gap:14px}
+sup,sub{font-size:.7em}
+code{background:#efeee9;border-radius:5px;padding:1px 6px;font-size:.88em}
+
+/* ── 顶部 ── */
+.hero{padding:24px 6px 6px;text-align:center}
+.badge{display:inline-block;font-size:12.5px;color:var(--accent);
+  background:var(--accent-soft);border-radius:99px;padding:3px 13px;letter-spacing:.06em}
+h1{font-size:29px;margin:10px 0 6px;letter-spacing:.02em}
+.hero-sub{color:var(--muted);font-size:14px;margin:0}
+
+/* ── 卡片与行 ── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:0 1px 2px rgba(30,30,20,.04)}
+.sec{padding:14px 16px}
+.sec-title{font-size:16px;margin:2px 0 6px}
+.setrow{display:flex;align-items:center;gap:12px;padding:11px 0;flex-wrap:wrap}
+.setrow+.setrow{border-top:1px solid var(--line)}
+.setname{font-weight:600;font-size:15px}
+.setname.small{font-weight:500;font-size:14px}
+.setmeta{color:var(--muted);font-size:13px}
+.setmeta.grow{flex:1;color:var(--ink)}
+.setbest{color:var(--accent);font-size:13px}
+.setacts{margin-left:auto;display:flex;gap:8px}
+
+/* ── 按钮 ── */
+button{font-family:inherit}
+.btn{border:1.5px solid var(--accent);background:var(--accent);color:#fff;
+  border-radius:10px;padding:8px 16px;font-size:14.5px;cursor:pointer;transition:.12s;line-height:1.4}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.ghost:hover{background:var(--accent-soft)}
+.btn.small{padding:5px 12px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.35;cursor:default;filter:none}
+
+/* ── 快捷入口 ── */
+.shortcuts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.scard{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;
+  padding:14px;cursor:pointer;font-size:15px}
+.scard b{font-size:15px}
+.scard span{color:var(--muted);font-size:12.5px}
+@media (max-width:560px){.shortcuts{grid-template-columns:1fr 1fr}}
+
+/* ── 做题页顶栏 ── */
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
+  background:rgba(244,244,241,.93);backdrop-filter:blur(8px);
+  padding:10px 2px;margin-bottom:12px;border-bottom:1px solid var(--line)}
+.topbar-title{font-weight:600;font-size:14.5px;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.pagebar{display:flex;align-items:center;gap:12px;margin:8px 0 2px}
+.pagebar-title{font-size:19px;margin:0}
+
+/* ── 题号导航 ── */
+.navgrid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.nv{width:34px;height:34px;border-radius:9px;border:1.5px solid var(--line);
+  background:#fff;font-size:13px;cursor:pointer;color:var(--ink);padding:0}
+.nv.cur{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.nv.ans{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.nv.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.nv.bad{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+
+/* ── 题卡 ── */
+.qcard{padding:16px 18px 18px}
+.qmeta{color:var(--muted);font-size:13px;margin-bottom:6px}
+.qstem{font-size:16.5px;line-height:1.85}
+.qno{color:var(--accent);font-weight:700;margin-right:2px}
+.blank{display:inline-block;min-width:2.6em;border-bottom:1.5px solid var(--muted);margin-left:4px}
+.cond{padding:2px 0 2px 14px;font-size:15.5px}
+.rubric{margin-top:10px;font-size:13px;color:var(--muted)}
+.rubric summary{cursor:pointer;user-select:none}
+.rubric summary:hover{color:var(--accent)}
+.rubricbody{margin-top:6px;line-height:1.8;background:#fbfaf7;border-radius:8px;padding:8px 12px}
+details.sec, details.cat{padding:12px 16px}
+summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;font-size:15.5px}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";color:var(--muted);transition:.15s;font-size:12px}
+details[open]>summary::before{transform:rotate(90deg)}
+.catcnt{margin-left:auto;color:var(--muted);font-size:12.5px}
+.subrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.subname{flex:1;font-size:14.5px}
+.subcnt{color:var(--muted);font-size:13px}
+
+/* ── 选项 ── */
+.optgrid{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.opt{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;
+  padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;
+  background:#fff;font-size:15.5px;line-height:1.6;cursor:pointer;transition:.12s;color:var(--ink)}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt .ol{font-weight:700;color:var(--accent);flex:0 0 auto}
+.opt.chosen{border-color:var(--accent);background:var(--accent-soft)}
+.opt.ok{border-color:var(--ok);background:var(--ok-soft)}
+.opt.ok .ol{color:var(--ok)}
+.opt.bad{border-color:var(--bad);background:var(--bad-soft)}
+.opt.bad .ol{color:var(--bad)}
+.opt:disabled{cursor:default}
+
+/* ── 解析面板 ── */
+.panel{margin-top:14px;background:#fbfaf7;border:1px solid var(--line);
+  border-left:3px solid var(--accent);border-radius:10px;padding:12px 15px;font-size:15px}
+.ansline{font-weight:600;margin-bottom:4px}
+.ansletter{color:var(--accent);font-size:17px}
+.yourbad{margin-left:10px;color:var(--bad);font-size:13.5px;font-weight:500}
+.yourok{margin-left:10px;color:var(--ok);font-size:13.5px;font-weight:500}
+.step{margin-top:4px}
+.trap,.trap-inline{color:#a08a4f;font-size:14px}
+.trap{margin-top:6px}
+.solmain{margin-top:2px}
+
+/* ── 底部翻题 ── */
+.qfooter{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px}
+.fcount{color:var(--muted);font-size:13.5px}
+
+/* ── 成绩页 ── */
+.result{padding:26px 18px;text-align:center}
+.score-big{font-size:46px;font-weight:800;color:var(--accent);line-height:1.2}
+.score-total{font-size:22px;color:var(--muted);font-weight:600}
+.score-sub{color:var(--muted);font-size:14px;margin:4px 0 14px}
+.exam-score{font-size:17px;font-weight:700;color:var(--ink);margin:-8px 0 14px}
+.exam-score .score-total{color:var(--muted);font-size:13px;font-weight:500}
+.rtitle{color:var(--muted);font-size:13px;margin:2px 0 6px;text-align:left}
+.rtable{display:flex;flex-direction:column;gap:5px;text-align:left;margin-bottom:16px}
+.rhead,.rrow{display:grid;grid-template-columns:46px 76px 76px 1fr;gap:8px;
+  align-items:center;padding:6px 12px;border-radius:8px;font-size:13.5px}
+.rhead{color:var(--muted);font-size:12px;padding-bottom:0}
+.rrow{border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink)}
+.rrow:hover{border-color:var(--accent)}
+.rrow.ok{background:var(--ok-soft);border-color:transparent}
+.rrow.bad{background:var(--bad-soft);border-color:transparent}
+.rrow.un{color:var(--muted)}
+.rrow span:first-child{font-weight:700}
+.rhead span:nth-child(2),.rrow span:nth-child(2),
+.rhead span:nth-child(3),.rrow span:nth-child(3){text-align:center}
+.chipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:7px;margin-bottom:16px}
+.chip{height:36px;border-radius:9px;border:1.5px solid var(--line);background:#fff;
+  font-size:14px;cursor:pointer;padding:0;color:var(--ink)}
+.chip.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.chip.bad{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.chip.un{color:var(--muted)}
+.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+
+/* ── 答案速查 ── */
+.ansgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:7px;margin-top:10px}
+.anschip{border:1px solid var(--line);border-radius:9px;padding:5px 8px;font-size:13px;
+  display:flex;gap:6px;align-items:baseline;background:#fff}
+.anschip b{color:var(--muted);font-weight:500;font-size:12px}
+.anschip{color:var(--accent);font-weight:700}
+.anschip span{color:var(--muted);font-weight:400;font-size:11px;flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── 标签页 / 空状态 / 说明 ── */
+.tabs{display:flex;gap:8px}
+.tab{border:1.5px solid var(--line);background:#fff;border-radius:99px;
+  padding:7px 18px;font-size:14.5px;cursor:pointer;color:var(--muted)}
+.tab.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+.empty{padding:28px 18px;text-align:center;color:var(--muted);font-size:14.5px}
+.helpcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:13px 16px}
+.helpbody{font-size:14px;color:#4b4a44;line-height:1.9;padding-top:8px}
+.helpbody h3{font-size:14.5px;margin:10px 0 4px}
+.helpbody p,.helpbody ol{margin:4px 0}
+.wrongrow .btn{margin-left:auto}
+.wrongrow .btn.ghost.small + .btn.ghost.small{margin-left:0}
+.streak{color:var(--ok);font-size:10px;letter-spacing:2px}
+
+/* ── 收录按钮 / 错题本汇总 ── */
+.qmeta{display:flex;align-items:center;gap:8px}
+.starbtn{margin-left:auto;background:none;border:none;color:var(--muted);
+  cursor:pointer;font-size:13px;padding:2px 4px;border-radius:6px}
+.starbtn:hover{color:var(--accent);background:var(--accent-soft)}
+.tagchips{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 12px}
+.tagchip{border:1.5px solid var(--line);background:#fff;border-radius:99px;
+  padding:4px 13px;font-size:13px;cursor:pointer;color:var(--ink)}
+.tagchip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.empty2{padding:16px 4px;color:var(--muted);font-size:14px;text-align:center;line-height:1.8}
+
+/* ── 多行解析(新格式) ── */
+.solp{color:var(--accent);font-size:14px;margin-bottom:2px}
+.solline{margin-top:3px}
+.nonsol{color:var(--muted);font-size:13.5px}
+
+/* ── 分组与答案卡(结构优化) ── */
+.grouprow{padding:12px 2px 2px;font-size:12.5px;color:var(--muted);letter-spacing:.12em;
+  border-top:1px dashed var(--line);margin-top:8px}
+.sec .grouprow:first-of-type{border-top:none;margin-top:0;padding-top:2px}
+.ansgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin-top:10px}
+.anschip{display:flex;flex-direction:column;align-items:center;gap:0;border:1px solid var(--line);
+  border-radius:9px;padding:5px 6px 4px;background:#fff;line-height:1.3}
+.a-no{font-size:10.5px;color:var(--muted)}
+.a-l{font-size:16px;color:var(--accent);font-weight:700}
+.a-tag{font-size:10px;color:var(--muted);max-width:100%;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+
+/* ── 答案速查:套卷筛选 + 详情弹层 ── */
+.setfilter{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}
+.fchip{flex:0 0 auto;border:1.5px solid var(--line);background:#fff;border-radius:99px;
+  padding:4px 13px;font-size:12.5px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.fchip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+button.anschip{cursor:pointer}
+button.anschip:hover{border-color:var(--accent)}
+button.anschip .a-l{color:var(--accent)}
+button.anschip.ok-like{cursor:default}
+.modal-overlay{position:fixed;inset:0;background:rgba(30,30,25,.45);z-index:50;
+  display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-card{background:var(--card);border-radius:var(--radius);width:min(94vw,660px);
+  max-height:86vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.modal-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.modal-title{flex:1;font-weight:600;font-size:14.5px;color:var(--accent)}
+.modal-close{border:none;background:var(--bg);border-radius:8px;width:30px;height:30px;
+  font-size:18px;cursor:pointer;color:var(--muted);line-height:1}
+.modal-body{padding:14px 18px 18px;overflow-y:auto}
+
+/* ── 字号加大(可读性优化) ── */
+body{font-size:17px}
+.qstem{font-size:18px;line-height:1.9}
+.opt{font-size:16.5px;padding:11px 15px}
+.cond{font-size:16.5px}
+.panel{font-size:16px}
+.solp{font-size:15px}
+.solmain{font-size:16px}
+.ansletter{font-size:18px}
+.modal-body .qstem{font-size:17.5px}
+
+/* ── 错题本:统计图 + 打印导出 ── */
+.statchart{display:flex;flex-direction:column;gap:5px;margin:4px 0 12px}
+.statrow{display:flex;align-items:center;gap:10px;border:none;background:none;
+  padding:3px 4px;border-radius:8px;cursor:pointer;width:100%;text-align:left}
+.statrow:hover{background:var(--accent-soft)}
+.statname{flex:0 0 96px;font-size:13px;text-align:right;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statbar{flex:1;height:16px;background:#efeee9;border-radius:99px;overflow:hidden}
+.statbar-fill{height:100%;background:linear-gradient(90deg,#1c7796,#3a9ab8);border-radius:99px}
+.statn{flex:0 0 30px;font-size:13px;font-weight:700;color:var(--accent)}
+
+/* ── iOS 主屏 App(PWA)安全区适配 ── */
+body{
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:env(safe-area-inset-left,0px);
+  padding-right:env(safe-area-inset-right,0px);
+}
+.topbar{top:env(safe-area-inset-top,0px)}

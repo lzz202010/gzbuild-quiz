@@ -1,0 +1,15 @@
+{
+  "name": "管综冲刺刷题",
+  "short_name": "管综刷题",
+  "description": "2027 管理类联考冲刺 · 预测卷刷题、专项练习与错题本",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f4f1",
+  "theme_color": "#1c7796",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
